@@ -5,6 +5,7 @@ import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.util.HashSet;
+import java.util.Random;
 
 public class PacMan extends JPanel implements ActionListener, KeyListener {
     private int rowCount = 21;
@@ -25,12 +26,20 @@ public class PacMan extends JPanel implements ActionListener, KeyListener {
     private Image pacmanLeftImage;
     private Image pacmanRightImage;
 
-    HashSet <Block> walls;
-    HashSet <Block> foods;
-    HashSet <Block> ghosts;
-    Block pacman;
+    protected HashSet <Block> walls;
+    protected HashSet <Block> foods;
+    protected HashSet <Block> ghosts;
+    protected Block pacman;
+    protected JButton continueButton;
 
-    Timer gameLoop;
+    private Timer gameLoop;
+    private char[] directions = {'U', 'D', 'L', 'R'}; //up down left right
+    private Random random = new Random();
+    private int score = 0;
+    private int lives = 3;
+    private boolean gameOver = false;
+    private boolean gamePause = false;
+
 
     private String[] tileMap = {
             "XXXXXXXXXXXXXXXXXXX",
@@ -59,6 +68,7 @@ public class PacMan extends JPanel implements ActionListener, KeyListener {
     public PacMan() {
         setPreferredSize(new Dimension(boardWidth, boardHeight));
         setBackground(Color.black);
+        setLayout(null);
 
         wallImage = new ImageIcon(getClass().getResource("./wall.png")).getImage();
         blueGhostImage = new ImageIcon(getClass().getResource("./blueGhost.png")).getImage();
@@ -72,7 +82,31 @@ public class PacMan extends JPanel implements ActionListener, KeyListener {
         pacmanLeftImage = new ImageIcon(getClass().getResource("./pacmanLeft.png")).getImage();
         pacmanRightImage = new ImageIcon(getClass().getResource("./pacmanRight.png")).getImage();
 
+        // Initialize the Continue button
+        continueButton = new JButton("Continue");
+        continueButton.setFocusable(false); // Prevent the button from stealing focus
+        continueButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                resumeGame();
+            }
+        });
+
+        // Position the button at the center of the panel
+        int buttonWidth = 120;
+        int buttonHeight = 50;
+        int buttonX = (boardWidth - buttonWidth) / 2;
+        int buttonY = (boardHeight - buttonHeight) / 2 + 70; // Slightly below the paused text
+        continueButton.setBounds(buttonX, buttonY, buttonWidth, buttonHeight);
+        continueButton.setBackground(Color.YELLOW);
+        continueButton.setVisible(false); // Initially hidden
+        add(continueButton);
+
         loadMap();
+        for (Block ghost : ghosts) {
+            char newDirection = directions[random.nextInt(4)];
+            ghost.updateDirection(newDirection);
+        }
         gameLoop = new Timer(50, this);
         gameLoop.start();
         addKeyListener(this);
@@ -136,11 +170,94 @@ public class PacMan extends JPanel implements ActionListener, KeyListener {
         for (Block food : foods) {
             g.fillRect(food.x, food.y, food.width, food.height);
         }
+
+        g.setFont(new Font("Arial", Font.PLAIN, 18));
+        if (gameOver) {
+            g.drawString("Game Over: " + String.valueOf(score), tileSize / 2, tileSize / 2);
+        } else {
+            g.drawString("Lives: " + String.valueOf(lives) + " Score: " + String.valueOf(score), tileSize / 2, tileSize / 2);
+        }
+
+        if (gamePause) {
+            g.setFont(new Font("Arial", Font.BOLD, 50));
+            g.setColor(Color.YELLOW);
+
+            String pausedText = "Game Paused";
+            FontMetrics fm = g.getFontMetrics();
+            int textWidth = fm.stringWidth(pausedText);
+            int textHeight = fm.getHeight();
+
+            int x = (boardWidth - textWidth) / 2;
+            int y = (boardHeight + textHeight) / 2;
+
+            g.drawString(pausedText, x, y);
+        }
+
     }
 
     public void move() {
         pacman.x += pacman.velocityX;
         pacman.y += pacman.velocityY;
+
+        for (Block wall : walls) {
+            if (collision(pacman, wall)) {
+                pacman.x -= pacman.velocityX;
+                pacman.y -= pacman.velocityY;
+                break;
+            }
+        }
+        for (Block ghost : ghosts) {
+            if (collision(ghost, pacman)) {
+                lives -= 1;
+                if (lives == 0) {
+                    gameOver = true;
+                    return;
+                }
+                resetPositions();
+            }
+
+            if (ghost.y == tileSize*9 && ghost.direction != 'U' && ghost.direction != 'D') {
+                ghost.updateDirection('U');
+            }
+            ghost.x += ghost.velocityX;
+            ghost.y += ghost.velocityY;
+            for (Block wall : walls) {
+                if (collision(ghost, wall) || ghost.x <= 0 || ghost.x + ghost.width >= boardWidth) {
+                    ghost.x -= ghost.velocityX;
+                    ghost.y -= ghost.velocityY;
+                    char newDirection = directions[random.nextInt(4)];
+                    ghost.updateDirection(newDirection);
+                }
+            }
+        }
+
+        Block foodEaten = null;
+        for (Block food : foods) {
+            if (collision(pacman, food)) {
+                foodEaten = food;
+                score += 10;
+            }
+        }
+        foods.remove(foodEaten);
+
+        if (foods.isEmpty()) {
+            loadMap();
+            resetPositions();
+        }
+
+
+    }
+
+    public void resetPositions() {
+        pacman.reset();
+        pacman.velocityX = 0;
+        pacman.velocityY = 0;
+
+        for (Block ghost : ghosts) {
+            ghost.reset();
+            char newDirection = directions[random.nextInt(4)];
+            ghost.updateDirection(newDirection);
+        }
     }
 
     public boolean collision(Block a, Block b) {
@@ -150,10 +267,23 @@ public class PacMan extends JPanel implements ActionListener, KeyListener {
                 a.y + a.height > b.y;
     }
 
+    private void resumeGame() {
+        gamePause = false;
+        gameLoop.start();
+        continueButton.setVisible(false);
+        repaint();
+    }
+
+
     @Override
     public void actionPerformed(ActionEvent e) {
-        move();
-        repaint();
+        if (!gamePause && !gameOver) {
+            move();
+            repaint();
+        }
+        if (gameOver) {
+            gameLoop.stop();
+        }
     }
 
     @Override
@@ -164,8 +294,28 @@ public class PacMan extends JPanel implements ActionListener, KeyListener {
 
     @Override
     public void keyReleased(KeyEvent e) {
-        System.out.println("KeyEvent" + e.getKeyCode());
-        if (e.getKeyCode() == KeyEvent.VK_UP) {
+
+        if (gameOver) {
+            loadMap();
+            resetPositions();
+            lives = 3;
+            score = 0;
+            gameOver = false;
+            gameLoop.start();
+        }
+
+        if (e.getKeyCode() == KeyEvent.VK_P) {
+
+            gamePause = !gamePause;
+
+            if (gamePause) {
+                gameLoop.stop();
+                continueButton.setVisible(true); // Show Continue button
+            } else {
+                resumeGame();
+            }
+            repaint(); // Refresh the panel to show/hide paused text
+        } else if (e.getKeyCode() == KeyEvent.VK_UP) {
             pacman.updateDirection('U');
         } else if (e.getKeyCode() == KeyEvent.VK_DOWN) {
             pacman.updateDirection('D');
@@ -174,5 +324,16 @@ public class PacMan extends JPanel implements ActionListener, KeyListener {
         } else if (e.getKeyCode() == KeyEvent.VK_RIGHT) {
             pacman.updateDirection('R');
         }
+
+        if (pacman.direction == 'U') {
+            pacman.image = pacmanUpImage;
+        } else if (pacman.direction == 'D') {
+            pacman.image = pacmanDownImage;
+        } else if (pacman.direction == 'L') {
+            pacman.image = pacmanLeftImage;
+        } else if (pacman.direction == 'R') {
+            pacman.image = pacmanRightImage;
+        }
+
     }
 }

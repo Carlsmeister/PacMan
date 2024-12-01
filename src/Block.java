@@ -32,8 +32,20 @@ public class Block {
     }
 
     public void updateDirection(char direction) {
+        char prevDirection = this.direction;
         this.direction = direction;
         updateVelocity();
+        this.x += this.velocityX;
+        this.y += this.velocityY;
+
+        for (Block wall : pacMan.walls) {
+            if (pacMan.collision(this, wall)) {
+                this.x -= this.velocityX;
+                this.y -= this.velocityY;
+                this.direction = prevDirection;
+                updateVelocity();
+            }
+        }
     }
 
     public void updateVelocity() {
@@ -54,4 +66,8 @@ public class Block {
         }
     } 
 
+    public void reset() {
+        this.x = this.startX;
+        this.y = this.startY;
+    }
 }
