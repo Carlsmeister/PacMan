@@ -15,9 +15,12 @@ public class MainFrame {
         frame.setResizable(false);
         frame.setSize(boardWidth, boardHeight);
 
+        PacMan pacMan = new PacMan();
+        frame.add(pacMan);
+        frame.pack();
+        pacMan.requestFocus();
 
         frame.setVisible(true);
-
     }
 
 
